@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -10,4 +8,74 @@ generator client {
 
 datasource db {
   provider = "sqlite"
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  name        String
+  category    String
+  description String?
+  dimensions  String?
+  image_url   String?
+  is_archived Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  pricing_versions PricingVersion[]
+
+  @@map("products")
+}
+
+model PricingVersion {
+  id                      Int      @id @default(autoincrement())
+  product_id              Int
+  version_name            String
+  labor_cost              Float
+  overhead_percentage     Float
+  overhead_cost           Float
+  contingency_percentage  Float
+  contingency_cost        Float
+  target_margin           Float
+  materials_total         Float
+  total_product_cost      Float
+  suggested_selling_price Float
+  final_selling_price     Float
+  profit                  Float
+  actual_margin           Float
+  created_at              DateTime @default(now())
+
+  product   Product    @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  materials Material[]
+
+  @@map("pricing_versions")
+}
+
+model Material {
+  id                 Int      @id @default(autoincrement())
+  pricing_version_id Int
+  name               String
+  unit_type          String
+  costing_price      Float
+  quantity           Float
+  wastage_percentage Float
+  wastage_cost       Float
+  total_cost         Float
+  created_at         DateTime @default(now())
+
+  pricing_version PricingVersion @relation(fields: [pricing_version_id], references: [id], onDelete: Cascade)
+
+  @@map("materials")
+}
+
+model MaterialLibrary {
+  id            Int      @id @default(autoincrement())
+  name          String
+  category      String
+  default_price Float
+  unit          String
+  supplier      String?
+  notes         String?
+  updated_at    DateTime @updatedAt
+
+  @@map("material_library")
 }

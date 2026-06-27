@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@prisma/adapter-better-sqlite3": "^7.8.0",
+    "better-sqlite3": "^12.11.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
@@ -29,6 +31,7 @@
   "devDependencies": {
     "@prisma/client": "^7.8.0",
     "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/numeral": "^2.0.5",
     "@types/react": "^19",
@@ -37,6 +40,7 @@
     "eslint-config-next": "16.2.9",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }

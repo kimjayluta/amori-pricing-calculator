@@ -1,5 +1,21 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Database Setup
+
+After cloning, set up the database before running the app:
+
+```bash
+npm install
+npx prisma migrate dev --name init   # creates the SQLite db and generates the Prisma client
+npx prisma db seed                    # loads sample products, pricing versions, and material library
+```
+
+To reset and re-seed from scratch:
+
+```bash
+npx prisma migrate reset
+```
+
 ## Getting Started
 
 First, run the development server:
