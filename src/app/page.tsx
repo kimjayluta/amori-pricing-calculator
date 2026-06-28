@@ -1,10 +1,12 @@
 import { Suspense } from 'react'
 import { format } from 'date-fns'
 import { getDashboardStats } from '@/actions/dashboard'
-import { getMarginStatus, type MarginStatus } from '@/lib/pricing-engine'
+import { getMarginStatus } from '@/lib/pricing-engine'
 import { formatPeso, formatPercent, cn } from '@/lib/utils'
+import { MARGIN_TEXT } from '@/components/ui/margin-badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { MarginBadge } from '@/components/ui/margin-badge'
 import type { MostProfitableItem, RecentProductItem } from '@/actions/dashboard'
 
 export default function DashboardPage() {
@@ -42,7 +44,7 @@ async function DashboardContent() {
           value={data.avg_margin !== null ? formatPercent(data.avg_margin) : '—'}
           valueClassName={
             data.avg_margin !== null
-              ? marginColorClass(getMarginStatus(data.avg_margin))
+              ? MARGIN_TEXT[getMarginStatus(data.avg_margin)]
               : undefined
           }
           subtitle={
@@ -170,13 +172,8 @@ function MostProfitableCard({ items }: { items: MostProfitableItem[] }) {
                   <td className="py-2.5 text-right font-mono tabular-nums">
                     {formatPeso(item.profit)}
                   </td>
-                  <td
-                    className={cn(
-                      'py-2.5 text-right font-medium',
-                      marginColorClass(getMarginStatus(item.actual_margin)),
-                    )}
-                  >
-                    {formatPercent(item.actual_margin)}
+                  <td className="py-2.5 text-right">
+                    <MarginBadge margin={item.actual_margin} />
                   </td>
                 </tr>
               ))}
@@ -222,14 +219,3 @@ function RecentProductsCard({ items }: { items: RecentProductItem[] }) {
   )
 }
 
-const MARGIN_COLORS: Record<MarginStatus, string> = {
-  danger: 'text-red-500',
-  warning: 'text-amber-500',
-  good: 'text-green-600',
-  great: 'text-emerald-600',
-  excellent: 'text-teal-500',
-}
-
-function marginColorClass(status: MarginStatus): string {
-  return MARGIN_COLORS[status]
-}

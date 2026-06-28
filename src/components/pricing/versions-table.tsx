@@ -6,11 +6,10 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { duplicatePricingVersion, deletePricingVersion } from '@/actions/pricing'
-import { getMarginStatus, type MarginStatus } from '@/lib/pricing-engine'
-import { formatPeso, formatPercent, cn } from '@/lib/utils'
+import { formatPeso } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { MarginBadge } from '@/components/ui/margin-badge'
 import {
   Table,
   TableBody,
@@ -49,13 +48,6 @@ type Version = {
   created_at: Date
 }
 
-const MARGIN_PILL: Record<MarginStatus, string> = {
-  danger:    'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  warning:   'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  good:      'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  great:     'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  excellent: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
-}
 
 export function VersionsTable({
   versions,
@@ -121,9 +113,7 @@ export function VersionsTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {versions.map(v => {
-              const status = getMarginStatus(v.actual_margin)
-              return (
+            {versions.map(v => (
                 <TableRow key={v.id}>
                   <TableCell>
                     <Link
@@ -146,12 +136,7 @@ export function VersionsTable({
                     {formatPeso(v.final_selling_price)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <span className={cn(
-                      'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                      MARGIN_PILL[status],
-                    )}>
-                      {formatPercent(v.actual_margin)}
-                    </span>
+                    <MarginBadge margin={v.actual_margin} />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {format(new Date(v.created_at), 'MMM d, yyyy')}
@@ -214,8 +199,7 @@ export function VersionsTable({
                     </TooltipProvider>
                   </TableCell>
                 </TableRow>
-              )
-            })}
+            ))}
           </TableBody>
         </Table>
       </div>

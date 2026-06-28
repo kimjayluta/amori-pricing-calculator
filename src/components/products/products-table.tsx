@@ -6,12 +6,12 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { duplicateProduct, archiveProduct } from '@/actions/products'
-import { getMarginStatus, type MarginStatus } from '@/lib/pricing-engine'
-import { formatPeso, formatPercent, cn } from '@/lib/utils'
+import { formatPeso, cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { MarginBadge } from '@/components/ui/margin-badge'
 import {
   Table,
   TableBody,
@@ -50,13 +50,6 @@ export type ProductRow = {
   pricing_versions: PricingVersion[]
 }
 
-const MARGIN_PILL: Record<MarginStatus, string> = {
-  danger: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  good: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  great: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  excellent: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
-}
 
 export function ProductsTable({ products }: { products: ProductRow[] }) {
   const router = useRouter()
@@ -140,9 +133,6 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
               ) : (
                 filtered.map(product => {
                   const latest = product.pricing_versions[0]
-                  const marginStatus = latest
-                    ? getMarginStatus(latest.actual_margin)
-                    : null
 
                   return (
                     <TableRow key={product.id}>
@@ -156,15 +146,8 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
                         {product.dimensions ?? '—'}
                       </TableCell>
                       <TableCell>
-                        {latest && marginStatus ? (
-                          <span
-                            className={cn(
-                              'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                              MARGIN_PILL[marginStatus],
-                            )}
-                          >
-                            {formatPercent(latest.actual_margin)}
-                          </span>
+                        {latest ? (
+                          <MarginBadge margin={latest.actual_margin} />
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

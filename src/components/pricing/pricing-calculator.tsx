@@ -274,12 +274,34 @@ export function PricingCalculator({
 
   // ── Pricing inputs ───────────────────────────────────────────────────────
   const [laborCost, setLaborCost] = useState(existingVersion?.labor_cost ?? 0)
-  const [overheadPct, setOverheadPct] = useState(existingVersion?.overhead_percentage ?? 15)
-  const [contingencyPct, setContingencyPct] = useState(existingVersion?.contingency_percentage ?? 10)
+  const [overheadPct, setOverheadPct] = useState(() => {
+    if (existingVersion) return existingVersion.overhead_percentage
+    if (typeof window !== 'undefined') {
+      const v = parseFloat(localStorage.getItem('amori:overhead_pct') ?? '')
+      if (!isNaN(v)) return v
+    }
+    return 15
+  })
+  const [contingencyPct, setContingencyPct] = useState(() => {
+    if (existingVersion) return existingVersion.contingency_percentage
+    if (typeof window !== 'undefined') {
+      const v = parseFloat(localStorage.getItem('amori:contingency_pct') ?? '')
+      if (!isNaN(v)) return v
+    }
+    return 10
+  })
+  const defaultMargin = (() => {
+    if (existingVersion) return existingVersion.target_margin
+    if (typeof window !== 'undefined') {
+      const v = parseFloat(localStorage.getItem('amori:target_margin') ?? '')
+      if (!isNaN(v)) return v
+    }
+    return 35
+  })()
   const [marginPreset, setMarginPreset] = useState<MarginPreset | 'custom'>(
-    existingVersion ? getInitialPreset(existingVersion.target_margin) : 35,
+    existingVersion ? getInitialPreset(existingVersion.target_margin) : getInitialPreset(defaultMargin),
   )
-  const [customMargin, setCustomMargin] = useState(existingVersion?.target_margin ?? 35)
+  const [customMargin, setCustomMargin] = useState(defaultMargin)
   const [finalPriceOverride, setFinalPriceOverride] = useState<number | null>(
     existingVersion &&
     existingVersion.final_selling_price !== existingVersion.suggested_selling_price

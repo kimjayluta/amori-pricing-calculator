@@ -2,8 +2,8 @@
 
 import { format } from 'date-fns'
 import * as XLSX from 'xlsx'
-import { getMarginStatus, type MarginStatus } from '@/lib/pricing-engine'
 import { formatPeso, formatPercent, cn } from '@/lib/utils'
+import { MarginBadge } from '@/components/ui/margin-badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Printer, Download } from 'lucide-react'
@@ -48,15 +48,6 @@ type Product = {
   description: string | null
 }
 
-// ─── Margin badge ─────────────────────────────────────────────────────────────
-
-const MARGIN_BADGE: Record<MarginStatus, string> = {
-  danger:    'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  warning:   'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  good:      'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  great:     'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  excellent: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
-}
 
 // ─── Excel export ─────────────────────────────────────────────────────────────
 
@@ -206,7 +197,6 @@ export function VersionDetail({
   product: Product
   version: Version
 }) {
-  const marginStatus = getMarginStatus(version.actual_margin)
   const priceOverridden = version.final_selling_price !== version.suggested_selling_price
 
   return (
@@ -376,12 +366,7 @@ export function VersionDetail({
 
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Actual Margin</span>
-                <span className={cn(
-                  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                  MARGIN_BADGE[marginStatus],
-                )}>
-                  {formatPercent(version.actual_margin)} · {marginStatus}
-                </span>
+                <MarginBadge margin={version.actual_margin} showLabel />
               </div>
             </div>
           </div>
