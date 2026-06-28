@@ -27,6 +27,25 @@ export async function getProducts() {
   }
 }
 
+export async function getProductsWithPricing() {
+  try {
+    const data = await prisma.product.findMany({
+      where: { is_archived: false },
+      include: {
+        pricing_versions: {
+          orderBy: { created_at: 'desc' },
+          take: 1,
+        },
+        _count: { select: { pricing_versions: true } },
+      },
+      orderBy: { created_at: 'desc' },
+    })
+    return ok(data)
+  } catch {
+    return fail('Failed to fetch products')
+  }
+}
+
 export async function getProduct(id: number) {
   try {
     const data = await prisma.product.findUniqueOrThrow({
