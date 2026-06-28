@@ -1,8 +1,9 @@
 'use client'
 
+import { Fragment } from 'react'
 import { format } from 'date-fns'
 import * as XLSX from 'xlsx'
-import { formatPeso, formatPercent, cn } from '@/lib/utils'
+import { formatPeso, cn } from '@/lib/utils'
 import { MarginBadge } from '@/components/ui/margin-badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -14,11 +15,17 @@ type Material = {
   id: number
   name: string
   unit_type: string
+  costing_method: string
   costing_price: number
   quantity: number
   wastage_percentage: number
   wastage_cost: number
   total_cost: number
+  sheet_price: number | null
+  sheet_width: number | null
+  sheet_height: number | null
+  usage_width: number | null
+  usage_height: number | null
 }
 
 type Version = {
@@ -102,17 +109,24 @@ function exportToExcel(product: Product, version: Version) {
 
   // ── Sheet 2: Materials ────────────────────────────────────────────────────
   const materialHeaders = [
-    'Name', 'Unit', '₱ / Unit', 'Quantity', 'Wastage %', 'Wastage ₱', 'Total ₱',
+    'Name', 'Unit', '₱ / Unit', 'Quantity', 'Wastage %', 'Wastage ₱', 'Total ₱', 'Notes',
   ]
-  const materialRows = version.materials.map(m => [
-    m.name,
-    m.unit_type,
-    m.costing_price,
-    m.quantity,
-    m.wastage_percentage / 100,
-    m.wastage_cost,
-    m.total_cost,
-  ])
+  const materialRows = version.materials.map(m => {
+    const isArea = m.costing_method === 'area'
+    const notes = isArea
+      ? `Sheet ₱${m.sheet_price} · ${m.sheet_width}×${m.sheet_height} cm → usage ${m.usage_width}×${m.usage_height} cm`
+      : ''
+    return [
+      m.name,
+      isArea ? 'area' : m.unit_type,
+      m.costing_price,
+      m.quantity,
+      m.wastage_percentage / 100,
+      m.wastage_cost,
+      m.total_cost,
+      notes,
+    ]
+  })
 
   const ws2 = XLSX.utils.aoa_to_sheet([
     materialHeaders,
@@ -122,8 +136,8 @@ function exportToExcel(product: Product, version: Version) {
   ])
 
   ws2['!cols'] = [
-    { wch: 26 }, { wch: 10 }, { wch: 12 }, { wch: 10 },
-    { wch: 12 }, { wch: 14 }, { wch: 14 },
+    { wch: 26 }, { wch: 8 }, { wch: 14 }, { wch: 12 },
+    { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 40 },
   ]
 
   // Format currency + percent columns for each material row
@@ -285,21 +299,60 @@ export function VersionDetail({
                   </thead>
                   <tbody>
                     {version.materials.map(m => (
-                      <tr key={m.id} className="border-b last:border-0 hover:bg-muted/20">
-                        <td className="px-4 py-2.5 font-medium">{m.name}</td>
-                        <td className="px-3 py-2.5 text-muted-foreground">{m.unit_type}</td>
-                        <td className="px-3 py-2.5 text-right font-mono tabular-nums">{formatPeso(m.costing_price)}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{m.quantity}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
-                          {m.wastage_percentage > 0 ? `${m.wastage_percentage}%` : '—'}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
-                          {formatPeso(m.wastage_cost)}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono tabular-nums font-semibold">
-                          {formatPeso(m.total_cost)}
-                        </td>
-                      </tr>
+                      <Fragment key={m.id}>
+                        <tr className={cn(
+                          'hover:bg-muted/20',
+                          m.costing_method === 'area' ? '' : 'border-b last:border-0',
+                        )}>
+                          <td className="px-4 py-2.5 font-medium">{m.name}</td>
+                          <td className="px-3 py-2.5 text-muted-foreground">
+                            {m.costing_method === 'area' ? (
+                              <span className="text-xs font-medium text-primary">area</span>
+                            ) : m.unit_type}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                            {m.costing_method === 'area' ? (
+                              <span className="text-xs text-muted-foreground">
+                                {m.costing_price > 0 ? `₱${m.costing_price.toFixed(5)}/cm²` : '—'}
+                              </span>
+                            ) : formatPeso(m.costing_price)}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">
+                            {m.costing_method === 'area' ? (
+                              <span className="text-xs text-muted-foreground">
+                                {Math.round(m.quantity).toLocaleString()} cm²
+                              </span>
+                            ) : m.quantity}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
+                            {m.wastage_percentage > 0 ? `${m.wastage_percentage}%` : '—'}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
+                            {formatPeso(m.wastage_cost)}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono tabular-nums font-semibold">
+                            {formatPeso(m.total_cost)}
+                          </td>
+                        </tr>
+                        {m.costing_method === 'area' && (
+                          <tr className="border-b last:border-0 bg-muted/10">
+                            <td className="pl-4 pr-0 pb-2 pt-0.5">
+                              <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60">
+                                sheet
+                              </span>
+                            </td>
+                            <td colSpan={6} className="px-3 pb-2 pt-0.5 text-xs text-muted-foreground">
+                              <span className="tabular-nums">
+                                ₱{m.sheet_price?.toLocaleString() ?? '—'} per sheet
+                                {' · '}
+                                {m.sheet_width ?? '—'} × {m.sheet_height ?? '—'} cm
+                                {' → '}
+                                usage {m.usage_width ?? '—'} × {m.usage_height ?? '—'} cm
+                              </span>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     ))}
                   </tbody>
                   <tfoot>

@@ -9,11 +9,18 @@ const fail = (error: string) => ({ success: false as const, error })
 export type MaterialInput = {
   name: string
   unit_type: string
+  costing_method: string
   costing_price: number
   quantity: number
   wastage_percentage: number
   wastage_cost: number
   total_cost: number
+  // Area-based costing (null when costing_method = "simple")
+  sheet_price?: number | null
+  sheet_width?: number | null
+  sheet_height?: number | null
+  usage_width?: number | null
+  usage_height?: number | null
 }
 
 export async function getMaterials(pricingVersionId: number) {

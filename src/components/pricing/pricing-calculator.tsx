@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState, useTransition } from 'react'
+import { Fragment, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -41,6 +41,7 @@ import {
   Loader2,
   RotateCcw,
   Search,
+  Ruler,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -50,11 +51,18 @@ type Row = {
   id?: number
   name: string
   unit_type: string
+  costing_method: 'simple' | 'area'
   costing_price: number
   quantity: number
   wastage_percentage: number
   wastage_cost: number
   total_cost: number
+  // Area-mode fields
+  sheet_price: number
+  sheet_width: number
+  sheet_height: number
+  usage_width: number
+  usage_height: number
 }
 
 type LibraryMaterial = {
@@ -69,11 +77,17 @@ type ExistingMaterial = {
   id: number
   name: string
   unit_type: string
+  costing_method: string
   costing_price: number
   quantity: number
   wastage_percentage: number
   wastage_cost: number
   total_cost: number
+  sheet_price: number | null
+  sheet_width: number | null
+  sheet_height: number | null
+  usage_width: number | null
+  usage_height: number | null
 }
 
 type ExistingVersion = {
@@ -115,6 +129,9 @@ const UNIT_TYPES = [
   'liter', 'kg', 'set', 'pair', 'roll', 'bag', 'can',
 ]
 
+const DEFAULT_SHEET_W = 122
+const DEFAULT_SHEET_H = 244
+
 const MARGIN_BADGE: Record<MarginStatus, string> = {
   danger:    'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
   warning:   'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
@@ -128,24 +145,64 @@ const MARGIN_BADGE: Record<MarginStatus, string> = {
 let _keyId = 0
 const genKey = () => `row-${++_keyId}`
 
-function buildRow(overrides?: Partial<Omit<Row, '_key' | 'wastage_cost' | 'total_cost'>>): Row {
-  const base = {
+function areaCosting(sheetPrice: number, sheetW: number, sheetH: number, useW: number, useH: number) {
+  const sheetArea = sheetW * sheetH
+  const pricePerCm2 = sheetArea > 0 ? sheetPrice / sheetArea : 0
+  const usageArea = useW * useH
+  return { pricePerCm2, usageArea }
+}
+
+function buildRow(
+  overrides?: Partial<Omit<Row, '_key' | 'wastage_cost' | 'total_cost'>>,
+): Row {
+  const base: Omit<Row, '_key' | 'wastage_cost' | 'total_cost'> = {
     name: '',
     unit_type: 'piece',
+    costing_method: 'simple',
     costing_price: 0,
     quantity: 1,
     wastage_percentage: 0,
+    sheet_price: 0,
+    sheet_width: DEFAULT_SHEET_W,
+    sheet_height: DEFAULT_SHEET_H,
+    usage_width: 0,
+    usage_height: 0,
     ...overrides,
   }
-  const wastage_cost = computeWastageCost(base.costing_price, base.quantity, base.wastage_percentage)
-  const total_cost = computeTotalMaterialCost(base.costing_price, base.quantity, wastage_cost)
-  return { _key: genKey(), ...base, wastage_cost, total_cost }
+
+  let costing_price = base.costing_price
+  let quantity = base.quantity
+
+  if (base.costing_method === 'area') {
+    const { pricePerCm2, usageArea } = areaCosting(
+      base.sheet_price, base.sheet_width, base.sheet_height,
+      base.usage_width, base.usage_height,
+    )
+    costing_price = pricePerCm2
+    quantity = usageArea
+  }
+
+  const wastage_cost = computeWastageCost(costing_price, quantity, base.wastage_percentage)
+  const total_cost = computeTotalMaterialCost(costing_price, quantity, wastage_cost)
+  return { _key: genKey(), ...base, costing_price, quantity, wastage_cost, total_cost }
 }
 
 function recompute(row: Row): Row {
-  const wastage_cost = computeWastageCost(row.costing_price, row.quantity, row.wastage_percentage)
-  const total_cost = computeTotalMaterialCost(row.costing_price, row.quantity, wastage_cost)
-  return { ...row, wastage_cost, total_cost }
+  let costing_price = row.costing_price
+  let quantity = row.quantity
+
+  if (row.costing_method === 'area') {
+    const { pricePerCm2, usageArea } = areaCosting(
+      row.sheet_price, row.sheet_width, row.sheet_height,
+      row.usage_width, row.usage_height,
+    )
+    costing_price = pricePerCm2
+    quantity = usageArea
+  }
+
+  const wastage_cost = computeWastageCost(costing_price, quantity, row.wastage_percentage)
+  const total_cost = computeTotalMaterialCost(costing_price, quantity, wastage_cost)
+  return { ...row, costing_price, quantity, wastage_cost, total_cost }
 }
 
 function getInitialPreset(margin: number): MarginPreset | 'custom' {
@@ -177,7 +234,6 @@ function LibraryDialog({
     )
   }, [materials, search])
 
-  // Group by category
   const grouped = useMemo(() => {
     const map = new Map<string, LibraryMaterial[]>()
     for (const m of filtered) {
@@ -265,9 +321,20 @@ export function PricingCalculator({
   const [rows, setRows] = useState<Row[]>(() =>
     existingVersion?.materials.length
       ? existingVersion.materials.map(m =>
-          buildRow({ id: m.id, name: m.name, unit_type: m.unit_type,
-            costing_price: m.costing_price, quantity: m.quantity,
-            wastage_percentage: m.wastage_percentage }),
+          buildRow({
+            id: m.id,
+            name: m.name,
+            unit_type: m.unit_type,
+            costing_method: m.costing_method === 'area' ? 'area' : 'simple',
+            costing_price: m.costing_method === 'simple' ? m.costing_price : 0,
+            quantity: m.costing_method === 'simple' ? m.quantity : 1,
+            wastage_percentage: m.wastage_percentage,
+            sheet_price: m.sheet_price ?? 0,
+            sheet_width: m.sheet_width ?? DEFAULT_SHEET_W,
+            sheet_height: m.sheet_height ?? DEFAULT_SHEET_H,
+            usage_width: m.usage_width ?? 0,
+            usage_height: m.usage_height ?? 0,
+          }),
         )
       : [buildRow()],
   )
@@ -338,6 +405,30 @@ export function PricingCalculator({
     )
   }
 
+  function toggleRowMode(key: string) {
+    setRows(prev => prev.map(r => {
+      if (r._key !== key) return r
+      if (r.costing_method === 'simple') {
+        return recompute({
+          ...r,
+          costing_method: 'area',
+          sheet_price: r.costing_price > 0 ? r.costing_price : 0,
+          sheet_width: DEFAULT_SHEET_W,
+          sheet_height: DEFAULT_SHEET_H,
+          usage_width: 0,
+          usage_height: 0,
+        })
+      }
+      // area → simple: reset to simple defaults so user re-enters unit price
+      return recompute({
+        ...r,
+        costing_method: 'simple',
+        costing_price: 0,
+        quantity: 1,
+      })
+    }))
+  }
+
   function addRow() {
     setRows(prev => [...prev, buildRow()])
   }
@@ -346,12 +437,21 @@ export function PricingCalculator({
     setRows(prev => {
       const idx = prev.findIndex(r => r._key === key)
       if (idx === -1) return prev
+      const src = prev[idx]
       const copy = buildRow({
-        name: prev[idx].name,
-        unit_type: prev[idx].unit_type,
-        costing_price: prev[idx].costing_price,
-        quantity: prev[idx].quantity,
-        wastage_percentage: prev[idx].wastage_percentage,
+        name: src.name,
+        unit_type: src.unit_type,
+        costing_method: src.costing_method,
+        wastage_percentage: src.wastage_percentage,
+        ...(src.costing_method === 'simple'
+          ? { costing_price: src.costing_price, quantity: src.quantity }
+          : {
+              sheet_price: src.sheet_price,
+              sheet_width: src.sheet_width,
+              sheet_height: src.sheet_height,
+              usage_width: src.usage_width,
+              usage_height: src.usage_height,
+            }),
       })
       return [...prev.slice(0, idx + 1), copy, ...prev.slice(idx + 1)]
     })
@@ -393,11 +493,17 @@ export function PricingCalculator({
       .map(r => ({
         name: r.name.trim(),
         unit_type: r.unit_type,
+        costing_method: r.costing_method,
         costing_price: r.costing_price,
         quantity: r.quantity,
         wastage_percentage: r.wastage_percentage,
         wastage_cost: r.wastage_cost,
         total_cost: r.total_cost,
+        sheet_price: r.costing_method === 'area' ? r.sheet_price : null,
+        sheet_width: r.costing_method === 'area' ? r.sheet_width : null,
+        sheet_height: r.costing_method === 'area' ? r.sheet_height : null,
+        usage_width: r.costing_method === 'area' ? r.usage_width : null,
+        usage_height: r.costing_method === 'area' ? r.usage_height : null,
       }))
 
     startTransition(async () => {
@@ -456,6 +562,23 @@ export function PricingCalculator({
       min={min}
       placeholder={placeholder}
       className={cn(right ? cellClsR : cellCls, className)}
+    />
+  )
+
+  // tiny numeric input for area sub-row
+  const tinyNum = (
+    value: number,
+    onChange: (v: number) => void,
+    placeholder = '0',
+  ) => (
+    <input
+      type="number"
+      value={value || ''}
+      onChange={e => onChange(parseFloat(e.target.value) || 0)}
+      step="0.01"
+      min="0"
+      placeholder={placeholder}
+      className="h-6 w-16 rounded border border-border bg-background px-1.5 text-xs tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
     />
   )
 
@@ -530,7 +653,7 @@ export function PricingCalculator({
 
             {/* Table */}
             <div className="overflow-x-auto rounded-xl border bg-card">
-              <table className="w-full min-w-[680px] text-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="border-b">
                     <th className="px-3 py-2.5 text-left font-medium text-muted-foreground" style={{ width: '200px', minWidth: '140px' }}>
@@ -554,77 +677,169 @@ export function PricingCalculator({
                     <th className="px-2 py-2.5 text-right font-medium text-muted-foreground" style={{ width: '104px' }}>
                       Total ₱
                     </th>
-                    <th className="w-[56px]" />
+                    <th className="w-[72px]" />
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row, idx) => (
-                    <tr
-                      key={row._key}
-                      className="group border-b last:border-0 hover:bg-muted/30 focus-within:bg-muted/20"
-                    >
-                      {/* Name */}
-                      <td className="px-3 py-1">
-                        <input
-                          type="text"
-                          value={row.name}
-                          onChange={e => updateRow(row._key, { name: e.target.value })}
-                          placeholder={`Material ${idx + 1}`}
-                          className={cn(cellCls, 'font-medium')}
-                        />
-                      </td>
-                      {/* Unit */}
-                      <td className="px-2 py-1">
-                        <input
-                          type="text"
-                          value={row.unit_type}
-                          onChange={e => updateRow(row._key, { unit_type: e.target.value })}
-                          list="unit-types"
-                          className={cellCls}
-                        />
-                      </td>
-                      {/* Price */}
-                      <td className="px-2 py-1">
-                        {numInput(row.costing_price, v => updateRow(row._key, { costing_price: v }), { right: true })}
-                      </td>
-                      {/* Qty */}
-                      <td className="px-2 py-1">
-                        {numInput(row.quantity, v => updateRow(row._key, { quantity: v }), { right: true, min: '0.01' })}
-                      </td>
-                      {/* Wastage % */}
-                      <td className="px-2 py-1">
-                        {numInput(row.wastage_percentage, v => updateRow(row._key, { wastage_percentage: v }), { right: true })}
-                      </td>
-                      {/* Waste ₱ — computed */}
-                      <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
-                        {formatPeso(row.wastage_cost)}
-                      </td>
-                      {/* Total ₱ — computed */}
-                      <td className="px-2 py-1.5 text-right tabular-nums font-medium">
-                        {formatPeso(row.total_cost)}
-                      </td>
-                      {/* Row actions */}
-                      <td className="px-2 py-1">
-                        <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                          <button
-                            type="button"
-                            title="Duplicate row"
-                            onClick={() => duplicateRow(row._key)}
-                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                          >
-                            <Copy className="size-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            title="Delete row"
-                            onClick={() => removeRow(row._key)}
-                            className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                    <Fragment key={row._key}>
+                      {/* ── Main row ──────────────────────────────────────── */}
+                      <tr
+                        className={cn(
+                          'group hover:bg-muted/30 focus-within:bg-muted/20',
+                          row.costing_method === 'area' ? '' : 'border-b last:border-0',
+                        )}
+                      >
+                        {/* Name */}
+                        <td className="px-3 py-1">
+                          <input
+                            type="text"
+                            value={row.name}
+                            onChange={e => updateRow(row._key, { name: e.target.value })}
+                            placeholder={`Material ${idx + 1}`}
+                            className={cn(cellCls, 'font-medium')}
+                          />
+                        </td>
+
+                        {/* Unit (simple) or area indicator */}
+                        <td className="px-2 py-1">
+                          {row.costing_method === 'simple' ? (
+                            <input
+                              type="text"
+                              value={row.unit_type}
+                              onChange={e => updateRow(row._key, { unit_type: e.target.value })}
+                              list="unit-types"
+                              className={cellCls}
+                            />
+                          ) : (
+                            <span className="flex items-center gap-1 text-xs text-primary font-medium">
+                              <Ruler className="size-3 shrink-0" />
+                              area
+                            </span>
+                          )}
+                        </td>
+
+                        {/* ₱ / Unit (simple) or Sheet ₱ (area) */}
+                        <td className="px-2 py-1">
+                          {row.costing_method === 'simple' ? (
+                            numInput(row.costing_price, v => updateRow(row._key, { costing_price: v }), { right: true })
+                          ) : (
+                            numInput(row.sheet_price, v => updateRow(row._key, { sheet_price: v }), { right: true, placeholder: 'Sheet ₱' })
+                          )}
+                        </td>
+
+                        {/* Qty (simple) or usage area cm² (area, read-only) */}
+                        <td className="px-2 py-1">
+                          {row.costing_method === 'simple' ? (
+                            numInput(row.quantity, v => updateRow(row._key, { quantity: v }), { right: true, min: '0.01' })
+                          ) : (
+                            <span className="block text-right text-xs tabular-nums text-muted-foreground">
+                              {Math.round(row.quantity).toLocaleString()} cm²
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Wastage % */}
+                        <td className="px-2 py-1">
+                          {numInput(row.wastage_percentage, v => updateRow(row._key, { wastage_percentage: v }), { right: true })}
+                        </td>
+
+                        {/* Waste ₱ — computed */}
+                        <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
+                          {formatPeso(row.wastage_cost)}
+                        </td>
+
+                        {/* Total ₱ — computed */}
+                        <td className="px-2 py-1.5 text-right tabular-nums font-medium">
+                          {formatPeso(row.total_cost)}
+                        </td>
+
+                        {/* Row actions */}
+                        <td className="px-2 py-1">
+                          <div className="flex items-center justify-end gap-0.5">
+                            {/* Area mode toggle */}
+                            <button
+                              type="button"
+                              title={row.costing_method === 'simple'
+                                ? 'Switch to area-based costing (e.g. plywood per sheet)'
+                                : 'Switch back to simple unit costing'}
+                              onClick={() => toggleRowMode(row._key)}
+                              className={cn(
+                                'rounded p-1 transition-colors',
+                                row.costing_method === 'area'
+                                  ? 'text-primary hover:bg-muted'
+                                  : 'text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted hover:text-foreground focus:opacity-100',
+                              )}
+                            >
+                              <Ruler className="size-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Duplicate row"
+                              onClick={() => duplicateRow(row._key)}
+                              className="rounded p-1 text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-muted hover:text-foreground transition-opacity"
+                            >
+                              <Copy className="size-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Delete row"
+                              onClick={() => removeRow(row._key)}
+                              className="rounded p-1 text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-opacity"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* ── Area sub-row (sheet + usage dimensions) ────────── */}
+                      {row.costing_method === 'area' && (
+                        <tr className="border-b last:border-0 bg-muted/10">
+                          {/* spacer for Name column */}
+                          <td className="pl-3 pr-0 pb-2.5 pt-0.5">
+                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60">
+                              area costing
+                            </span>
+                          </td>
+                          <td colSpan={6} className="px-2 pb-2.5 pt-0.5">
+                            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs">
+
+                              {/* Sheet dimensions */}
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-muted-foreground">Sheet W</span>
+                                {tinyNum(row.sheet_width, v => updateRow(row._key, { sheet_width: v }), '122')}
+                                <span className="text-muted-foreground">×</span>
+                                <span className="text-muted-foreground">H</span>
+                                {tinyNum(row.sheet_height, v => updateRow(row._key, { sheet_height: v }), '244')}
+                                <span className="text-muted-foreground">cm</span>
+                              </div>
+
+                              {/* Usage dimensions */}
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-medium text-muted-foreground">Usage W</span>
+                                {tinyNum(row.usage_width, v => updateRow(row._key, { usage_width: v }), '0')}
+                                <span className="text-muted-foreground">×</span>
+                                <span className="font-medium text-muted-foreground">H</span>
+                                {tinyNum(row.usage_height, v => updateRow(row._key, { usage_height: v }), '0')}
+                                <span className="text-muted-foreground">cm</span>
+                              </div>
+
+                              {/* Computed ₱/cm² */}
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <span>₱/cm²</span>
+                                <span className="font-mono tabular-nums">
+                                  {row.costing_price > 0 ? row.costing_price.toFixed(5) : '—'}
+                                </span>
+                              </div>
+
+                            </div>
+                          </td>
+                          {/* spacer for actions column */}
+                          <td />
+                        </tr>
+                      )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

@@ -55,11 +55,18 @@ model Material {
   pricing_version_id Int
   name               String
   unit_type          String
+  costing_method     String   @default("simple")
   costing_price      Float
   quantity           Float
   wastage_percentage Float
   wastage_cost       Float
   total_cost         Float
+  // Area-based costing fields (null when costing_method = "simple")
+  sheet_price        Float?
+  sheet_width        Float?
+  sheet_height       Float?
+  usage_width        Float?
+  usage_height       Float?
   created_at         DateTime @default(now())
 
   pricing_version PricingVersion @relation(fields: [pricing_version_id], references: [id], onDelete: Cascade)
