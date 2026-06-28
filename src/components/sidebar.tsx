@@ -13,7 +13,7 @@ import {
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/products', label: 'Products', icon: Package },
-  { href: '/library', label: 'Material Library', icon: BookOpen },
+  { href: '/material-library', label: 'Material Library', icon: BookOpen },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -22,6 +22,7 @@ export function Sidebar() {
 
   return (
     <aside
+      data-print-hide
       className="flex h-full w-60 shrink-0 flex-col"
       style={{ backgroundColor: '#1A2E1A' }}
     >
