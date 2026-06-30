@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Plus } from 'lucide-react'
 import { getProduct } from '@/actions/products'
+import { getPricingVersions } from '@/actions/pricing'
 import { ProductForm } from '@/components/products/product-form'
+import { VersionsTable } from '@/components/pricing/versions-table'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 
@@ -16,13 +18,18 @@ export default async function EditProductPage({ params }: PageProps) {
 
   if (isNaN(productId)) notFound()
 
-  const result = await getProduct(productId)
-  if (!result.success) notFound()
+  const [productResult, versionsResult] = await Promise.all([
+    getProduct(productId),
+    getPricingVersions(productId),
+  ])
 
-  const product = result.data
+  if (!productResult.success) notFound()
+
+  const product = productResult.data
+  const versions = versionsResult.success ? versionsResult.data : []
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-8">
+    <div className="mx-auto max-w-screen-xl space-y-6 p-8">
       <Link
         href="/products"
         className={buttonVariants({ variant: 'ghost', size: 'sm' })}
@@ -31,7 +38,7 @@ export default async function EditProductPage({ params }: PageProps) {
         Back to Products
       </Link>
 
-      <Card>
+      <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle>Edit Product</CardTitle>
           <CardDescription>{product.name}</CardDescription>
@@ -49,6 +56,20 @@ export default async function EditProductPage({ params }: PageProps) {
           />
         </CardContent>
       </Card>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Pricing Versions</h2>
+          <Link
+            href={`/pricing/${productId}/new`}
+            className={buttonVariants({ size: 'sm' })}
+          >
+            <Plus className="size-4" />
+            New Version
+          </Link>
+        </div>
+        <VersionsTable versions={versions} productId={productId} />
+      </div>
     </div>
   )
 }

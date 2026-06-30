@@ -222,9 +222,12 @@ function LibraryDialog({
   open: boolean
   onClose: () => void
   materials: LibraryMaterial[]
-  onAdd: (m: LibraryMaterial) => void
+  onAdd: (m: LibraryMaterial, qty: number) => void
 }) {
   const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState<LibraryMaterial | null>(null)
+  const [qty, setQty] = useState(1)
+  const qtyRef = useRef<HTMLInputElement>(null)
 
   const filtered = useMemo(() => {
     if (!search.trim()) return materials
@@ -244,28 +247,63 @@ function LibraryDialog({
     return map
   }, [filtered])
 
-  return (
-    <Dialog open={open} onOpenChange={o => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg flex flex-col gap-3" style={{ maxHeight: '85vh' }}>
-        <DialogHeader>
-          <DialogTitle>Import from Material Library</DialogTitle>
-          <DialogDescription>
-            Click a material to add it to the materials list.
-          </DialogDescription>
-        </DialogHeader>
+  function handleSelect(m: LibraryMaterial) {
+    if (selected?.id === m.id) {
+      // second click confirms immediately
+      onAdd(m, qty)
+      setSelected(null)
+      setQty(1)
+      onClose()
+      return
+    }
+    setSelected(m)
+    setQty(1)
+    setTimeout(() => qtyRef.current?.focus(), 50)
+  }
 
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="pl-8"
-            placeholder="Search materials…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            autoFocus
-          />
+  function handleConfirm() {
+    if (!selected) return
+    onAdd(selected, qty)
+    setSelected(null)
+    setQty(1)
+    onClose()
+  }
+
+  function handleClose() {
+    setSelected(null)
+    setQty(1)
+    onClose()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={o => !o && handleClose()}>
+      <DialogContent className="sm:max-w-lg flex flex-col gap-3 p-0 overflow-hidden" style={{ maxHeight: '85vh' }}>
+        {/* Header */}
+        <div className="px-6 pt-6 pb-0">
+          <DialogHeader>
+            <DialogTitle>Import from Material Library</DialogTitle>
+            <DialogDescription>
+              Select a material, set the quantity, then click Add.
+            </DialogDescription>
+          </DialogHeader>
         </div>
 
-        <div className="overflow-y-auto flex-1 space-y-4 pr-1">
+        {/* Search */}
+        <div className="px-6">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="pl-8"
+              placeholder="Search materials…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              autoFocus
+            />
+          </div>
+        </div>
+
+        {/* Material list */}
+        <div className="overflow-y-auto flex-1 space-y-4 px-6 pr-5">
           {grouped.size === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
               No materials found.
@@ -280,21 +318,80 @@ function LibraryDialog({
                   {items.map(m => (
                     <button
                       key={m.id}
-                      onClick={() => { onAdd(m); onClose() }}
-                      className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+                      onClick={() => handleSelect(m)}
+                      className={cn(
+                        'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors',
+                        selected?.id === m.id
+                          ? 'bg-primary/10 ring-1 ring-primary/30'
+                          : 'hover:bg-muted',
+                      )}
                     >
                       <div>
                         <p className="font-medium">{m.name}</p>
-                        <p className="text-xs text-muted-foreground">{m.unit}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatPeso(m.default_price)} / {m.unit}
+                        </p>
                       </div>
-                      <span className="ml-4 shrink-0 font-mono tabular-nums text-muted-foreground">
-                        {formatPeso(m.default_price)}
-                      </span>
+                      {selected?.id === m.id ? (
+                        <span className="ml-4 shrink-0 text-xs text-primary font-medium">
+                          selected ↓
+                        </span>
+                      ) : (
+                        <span className="ml-4 shrink-0 font-mono tabular-nums text-muted-foreground">
+                          {formatPeso(m.default_price)}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
               </div>
             ))
+          )}
+        </div>
+
+        {/* Footer: quantity + confirm */}
+        <div className={cn(
+          'border-t bg-muted/30 px-6 py-4 transition-all',
+          selected ? 'opacity-100' : 'opacity-50 pointer-events-none',
+        )}>
+          {selected ? (
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{selected.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatPeso(selected.default_price)} per {selected.unit}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Label htmlFor="lib-qty" className="text-xs text-muted-foreground whitespace-nowrap">
+                  How many?
+                </Label>
+                <Input
+                  ref={qtyRef}
+                  id="lib-qty"
+                  type="number"
+                  value={qty || ''}
+                  min="0.01"
+                  step="1"
+                  onChange={e => setQty(parseFloat(e.target.value) || 1)}
+                  onKeyDown={e => e.key === 'Enter' && handleConfirm()}
+                  className="h-8 w-20 text-right tabular-nums"
+                />
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-xs text-muted-foreground">Total</p>
+                <p className="font-mono text-sm font-semibold tabular-nums">
+                  {formatPeso((selected.default_price) * qty)}
+                </p>
+              </div>
+              <Button size="sm" onClick={handleConfirm} className="shrink-0">
+                Add
+              </Button>
+            </div>
+          ) : (
+            <p className="text-center text-xs text-muted-foreground">
+              Select a material above to set the quantity.
+            </p>
           )}
         </div>
       </DialogContent>
@@ -461,10 +558,10 @@ export function PricingCalculator({
     setRows(prev => (prev.length === 1 ? [buildRow()] : prev.filter(r => r._key !== key)))
   }
 
-  function addFromLibrary(m: LibraryMaterial) {
+  function addFromLibrary(m: LibraryMaterial, qty: number) {
     setRows(prev => [
       ...prev,
-      buildRow({ name: m.name, unit_type: m.unit, costing_price: m.default_price }),
+      buildRow({ name: m.name, unit_type: m.unit, costing_price: m.default_price, quantity: qty }),
     ])
   }
 
@@ -515,7 +612,7 @@ export function PricingCalculator({
           await Promise.all(matPayloads.map(m => createMaterial(vr.data.id, m)))
 
           toast.success('Pricing version created!')
-          router.replace(`/pricing/${productId}/${vr.data.id}`)
+          router.push('/products')
         } else {
           const versionIdNum = existingVersion!.id
           const vr = await updatePricingVersion(versionIdNum, versionPayload)
@@ -526,6 +623,7 @@ export function PricingCalculator({
           initialIdsRef.current = created.flatMap(r => r.success ? [r.data.id] : [])
 
           toast.success('Pricing version updated!')
+          router.push('/products')
         }
       } catch {
         toast.error('An unexpected error occurred')
@@ -810,7 +908,7 @@ export function PricingCalculator({
                                 <span className="text-muted-foreground">Sheet W</span>
                                 {tinyNum(row.sheet_width, v => updateRow(row._key, { sheet_width: v }), '122')}
                                 <span className="text-muted-foreground">×</span>
-                                <span className="text-muted-foreground">H</span>
+                                <span className="text-muted-foreground">L</span>
                                 {tinyNum(row.sheet_height, v => updateRow(row._key, { sheet_height: v }), '244')}
                                 <span className="text-muted-foreground">cm</span>
                               </div>
@@ -820,7 +918,7 @@ export function PricingCalculator({
                                 <span className="font-medium text-muted-foreground">Usage W</span>
                                 {tinyNum(row.usage_width, v => updateRow(row._key, { usage_width: v }), '0')}
                                 <span className="text-muted-foreground">×</span>
-                                <span className="font-medium text-muted-foreground">H</span>
+                                <span className="font-medium text-muted-foreground">L</span>
                                 {tinyNum(row.usage_height, v => updateRow(row._key, { usage_height: v }), '0')}
                                 <span className="text-muted-foreground">cm</span>
                               </div>

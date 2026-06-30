@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { duplicateProduct, archiveProduct } from '@/actions/products'
+import { deleteProduct } from '@/actions/products'
 import { formatPeso, cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
 import { Button } from '@/components/ui/button'
@@ -34,7 +34,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Eye, Pencil, Copy, Archive, Search, Loader2 } from 'lucide-react'
+import { Eye, Pencil, Trash2, Search, Loader2 } from 'lucide-react'
 
 type PricingVersion = {
   actual_margin: number
@@ -55,7 +55,7 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [search, setSearch] = useState('')
-  const [archiveTarget, setArchiveTarget] = useState<{ id: number; name: string } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
 
   const filtered = useMemo(() => {
     if (!search.trim()) return products
@@ -67,24 +67,12 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
     )
   }, [products, search])
 
-  function handleDuplicate(id: number, name: string) {
+  function handleDelete(id: number, name: string) {
+    setDeleteTarget(null)
     startTransition(async () => {
-      const result = await duplicateProduct(id)
+      const result = await deleteProduct(id)
       if (result.success) {
-        toast.success(`"${name}" duplicated`)
-        router.refresh()
-      } else {
-        toast.error(result.error)
-      }
-    })
-  }
-
-  function handleArchive(id: number, name: string) {
-    setArchiveTarget(null)
-    startTransition(async () => {
-      const result = await archiveProduct(id)
-      if (result.success) {
-        toast.success(`"${name}" archived`)
+        toast.success(`"${name}" deleted`)
         router.refresh()
       } else {
         toast.error(result.error)
@@ -172,7 +160,7 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
                                   size: 'icon-sm',
                                 })}
                                 render={
-                                  <Link href={`/products/${product.id}`} />
+                                  <Link href={`/pricing/${product.id}`} />
                                 }
                               >
                                 <Eye className="size-4" />
@@ -203,25 +191,7 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
                                     size="icon-sm"
                                     disabled={isPending}
                                     onClick={() =>
-                                      handleDuplicate(product.id, product.name)
-                                    }
-                                  />
-                                }
-                              >
-                                <Copy className="size-4" />
-                              </TooltipTrigger>
-                              <TooltipContent>Duplicate</TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                              <TooltipTrigger
-                                render={
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    disabled={isPending}
-                                    onClick={() =>
-                                      setArchiveTarget({
+                                      setDeleteTarget({
                                         id: product.id,
                                         name: product.name,
                                       })
@@ -229,9 +199,9 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
                                   />
                                 }
                               >
-                                <Archive className="size-4 text-muted-foreground" />
+                                <Trash2 className="size-4 text-muted-foreground" />
                               </TooltipTrigger>
-                              <TooltipContent>Archive</TooltipContent>
+                              <TooltipContent>Delete</TooltipContent>
                             </Tooltip>
                           </div>
                         </TooltipProvider>
@@ -253,21 +223,21 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
       </div>
 
       <Dialog
-        open={archiveTarget !== null}
-        onOpenChange={open => !open && setArchiveTarget(null)}
+        open={deleteTarget !== null}
+        onOpenChange={open => !open && setDeleteTarget(null)}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Archive product?</DialogTitle>
+            <DialogTitle>Delete product?</DialogTitle>
             <DialogDescription>
-              <strong>"{archiveTarget?.name}"</strong> will be hidden from your
-              catalog. You can restore it from the archived products list later.
+              <strong>"{deleteTarget?.name}"</strong> and all its pricing versions
+              will be permanently deleted. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setArchiveTarget(null)}
+              onClick={() => setDeleteTarget(null)}
               disabled={isPending}
             >
               Cancel
@@ -276,12 +246,12 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
               variant="destructive"
               disabled={isPending}
               onClick={() =>
-                archiveTarget &&
-                handleArchive(archiveTarget.id, archiveTarget.name)
+                deleteTarget &&
+                handleDelete(deleteTarget.id, deleteTarget.name)
               }
             >
               {isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
-              Archive
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -80,16 +80,13 @@ export async function updateProduct(id: number, data: Partial<ProductInput>) {
   }
 }
 
-export async function archiveProduct(id: number) {
+export async function deleteProduct(id: number) {
   try {
-    const product = await prisma.product.update({
-      where: { id },
-      data: { is_archived: true },
-    })
+    await prisma.product.delete({ where: { id } })
     revalidatePath('/')
-    return ok(product)
+    return ok({ id })
   } catch {
-    return fail('Failed to archive product')
+    return fail('Failed to delete product')
   }
 }
 
